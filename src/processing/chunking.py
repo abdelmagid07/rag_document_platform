@@ -1,9 +1,7 @@
-from dataclasses import dataclass
 from typing import List
-
-from ..config import Config
-from .pdf_processor import LogicalDocument
-
+from dataclasses import dataclass
+from .ingestion import LogicalDocument
+from .config import Config
 
 @dataclass
 class ChunkMetadata:
@@ -14,35 +12,28 @@ class ChunkMetadata:
     page_start: int
     page_end: int
     text: str
-    embedding: list | None = None
-
+    embedding: list = None
 
 def chunk_document(logical_doc: LogicalDocument) -> List[ChunkMetadata]:
     """Simple sliding window chunking with overlap."""
     words = logical_doc.text.split()
-    if not words:
-        return []
-
     chunks = []
-    stride = max(1, Config.CHUNK_SIZE - Config.CHUNK_OVERLAP)
+    stride = Config.CHUNK_SIZE - Config.CHUNK_OVERLAP
     for i, start_idx in enumerate(range(0, len(words), stride)):
         end_idx = min(start_idx + Config.CHUNK_SIZE, len(words))
         chunk_text = " ".join(words[start_idx:end_idx])
-        chunks.append(
-            ChunkMetadata(
-                chunk_id=f"{logical_doc.doc_id}_chunk_{i}",
-                doc_id=logical_doc.doc_id,
-                doc_type=logical_doc.doc_type,
-                chunk_index=i,
-                page_start=logical_doc.page_start,
-                page_end=logical_doc.page_end,
-                text=chunk_text,
-            )
-        )
+        chunks.append(ChunkMetadata(
+            chunk_id=f"{logical_doc.doc_id}_chunk_{i}",
+            doc_id=logical_doc.doc_id,
+            doc_type=logical_doc.doc_type,
+            chunk_index=i,
+            page_start=logical_doc.page_start,
+            page_end=logical_doc.page_end,
+            text=chunk_text
+        ))
         if end_idx == len(words):
             break
     return chunks
-
 
 def chunk_all_documents(logical_docs: List[LogicalDocument]) -> List[ChunkMetadata]:
     """Chunk all logical documents."""
