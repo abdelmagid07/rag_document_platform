@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSE Stream Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        #output {
+            white-space: pre-wrap;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 100px;
+            border: 1px solid #334155;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .status {
+            color: #94a3b8;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>RAG Streaming Test</h2>
+    <div class="status" id="status">Ready</div>
+    <input type="text" id="query" value="What is the experience at Hawl Technologies?" />
+    <button onclick="runQuery()">Run Stream Query</button>
+    <p>Output:</p>
+    <div id="output"></div>
+
+    <script>
+        async function runQuery() {
+            const query = document.getElementById('query').value;
+            const output = document.getElementById('output');
+            const status = document.getElementById('status');
+            output.innerText = "";
+            status.innerText = "Connecting...";
+
+            try {
+                // UPDATE PORT HERE FOR TESTING
+                const response = await fetch('http://127.0.0.1:8090/query/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, top_k: 3 })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.substring(6));
+                            if (data.status) {
+                                status.innerText = "Status: " + data.status;
+                            } else if (data.token) {
+                                output.innerText += data.token;
+                                status.innerText = "Streaming answer...";
+                            } else if (data.done) {
+                                status.innerText = `Done in ${data.latency_ms}ms`;
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                status.innerText = "Error: " + err.message;
+            }
+        }
+    </script>
+</body>
+
+</html>

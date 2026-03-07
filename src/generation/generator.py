@@ -1,20 +1,23 @@
-from openai import AsyncOpenAI
+from google import genai
 import os
 from dotenv import load_dotenv
+from ..config import Config
 
 load_dotenv()
-# Using the Async client for streaming support
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Initialize the new Google GenAI Client
+client = genai.Client(api_key=Config.GEMINI_API_KEY)
 
 
 async def generate_answer_stream(query, documents):
     """
-    Asynchronous generator that yields tokens from the LLM.
+    Asynchronous generator that yields tokens from Gemini using the new SDK (V1).
     """
     context = "\n\n".join([doc["text"] for doc in documents])
 
     prompt = f"""
-Answer the question using the context below.
+Answer the question using the context below. 
+Be concise and helpful.
 
 Context:
 {context}
@@ -23,24 +26,41 @@ Question:
 {query}
 """
 
-    stream = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
-        stream=True
-    )
+    # Using the new Client-based streaming API
+    try:
+        response = client.models.generate_content_stream(
+            model=Config.LLM_MODEL,
+            contents=prompt
+        )
 
-    async for chunk in stream:
-        if chunk.choices[0].delta.content is not None:
-            yield chunk.choices[0].delta.content
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        from ..services.logger import logger
+        logger.error(f"Gemini Streaming Error: {str(e)}")
+        yield f"Error in generation: {str(e)}"
 
 
 async def generate_answer(query, documents):
     """
-    Legacy sync-style wrapper (still async) that returns the full string.
+    Returns the full string from Gemini using the new SDK.
     """
-    full_response = ""
-    async for token in generate_answer_stream(query, documents):
-        full_response += token
-    return full_response
+    context = "\n\n".join([doc["text"] for doc in documents])
+
+    prompt = f"""
+Answer the question using the context below. 
+Be concise and helpful.
+
+Context:
+{context}
+
+Question:
+{query}
+"""
+    response = client.models.generate_content(
+        model=Config.LLM_MODEL,
+        contents=prompt
+    )
+    
+    return response.text

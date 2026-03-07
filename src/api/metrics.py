@@ -12,8 +12,7 @@ class MetricsStore:
         self.latencies: Dict[str, List[float]] = {
             "total": [],
             "embedding": [],
-            "retrieval": [],
-            "generation": []
+            "retrieval": []
         }
         self.load()
 

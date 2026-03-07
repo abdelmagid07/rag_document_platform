@@ -30,7 +30,7 @@ class DocumentMetadata(BaseModel):
 
 
 class EvaluationRequest(BaseModel):
-    sample_size: int = 10
+    sample_size: int = 25
 
 
 class EvaluationResponse(BaseModel):

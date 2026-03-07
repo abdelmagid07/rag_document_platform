@@ -10,8 +10,8 @@ from .logger import logger
 async def run_query(query: str, top_k: int):
     start_total = time.time()
     
-    # Embed query
-    query_embedding = get_embeddings(query)
+    # Embed query 
+    query_embedding = await get_embeddings(query)
 
     # Retrieve documents
     start_retr = time.time()
@@ -19,15 +19,12 @@ async def run_query(query: str, top_k: int):
     retr_latency = (time.time() - start_retr) * 1000
     metrics_store.record("retrieval", retr_latency)
 
-    # Generate answer
-    start_gen = time.time()
-    answer = await generate_answer(query, retrieved_docs)
-    gen_latency = (time.time() - start_gen) * 1000
-    metrics_store.record("generation", gen_latency)
-
-    # Total Latency
+    # Total Latency 
     total_latency = (time.time() - start_total) * 1000
     metrics_store.record("total", total_latency)
+
+    # Generate answer 
+    answer = await generate_answer(query, retrieved_docs)
 
     # Structured Logging
     logger.info(
@@ -38,7 +35,6 @@ async def run_query(query: str, top_k: int):
             "retrieved_count": len(retrieved_docs),
             "latency_total_ms": round(total_latency, 2),
             "latency_retrieval_ms": round(retr_latency, 2),
-            "latency_generation_ms": round(gen_latency, 2),
             "doc_ids": [doc["doc_id"] for doc in retrieved_docs]
         }}
     )
@@ -60,10 +56,11 @@ async def run_query_stream(query: str, top_k: int):
     Asynchronous generator for SSE streaming.
     Yields JSON-encoded strings.
     """
+    yield f"data: {json.dumps({'status': 'searching'})}\n\n"
     start_total = time.time()
     
     # Embed query
-    query_embedding = get_embeddings(query)
+    query_embedding = await get_embeddings(query)
 
     # Retrieve documents
     start_retr = time.time()
@@ -80,24 +77,18 @@ async def run_query_stream(query: str, top_k: int):
     
     yield f"data: {json.dumps({'sources': sources})}\n\n"
 
-    # Generate answer stream
-    start_gen = time.time()
-    full_answer = ""
-    async for token in generate_answer_stream(query, retrieved_docs):
-        full_answer += token
-        yield f"data: {json.dumps({'token': token})}\n\n"
-    
-    gen_latency = (time.time() - start_gen) * 1000
-    metrics_store.record("generation", gen_latency)
-
-    # Total Latency
+    # Total Latency 
     total_latency = (time.time() - start_total) * 1000
     metrics_store.record("total", total_latency)
 
+    # Generate answer stream
+    async for token in generate_answer_stream(query, retrieved_docs):
+        yield f"data: {json.dumps({'token': token})}\n\n"
+    
     # Final metadata event
     yield f"data: {json.dumps({'latency_ms': round(total_latency, 2), 'done': True})}\n\n"
 
-    # Structured Logging (same as sync version)
+    # Structured Logging
     logger.info(
         f"Streamed query processed: {query[:50]}...",
         extra={"props": {
@@ -106,7 +97,6 @@ async def run_query_stream(query: str, top_k: int):
             "retrieved_count": len(retrieved_docs),
             "latency_total_ms": round(total_latency, 2),
             "latency_retrieval_ms": round(retr_latency, 2),
-            "latency_generation_ms": round(gen_latency, 2),
             "doc_ids": [doc["doc_id"] for doc in retrieved_docs]
         }}
     )

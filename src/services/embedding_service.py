@@ -1,26 +1,30 @@
-from openai import OpenAI
-import os
 import time
-from dotenv import load_dotenv
+from fastembed import TextEmbedding
 from ..api.metrics import metrics_store
 from .logger import logger
 
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Initialize FastEmbed model 
+model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 
-def get_embeddings(text_input: str | list[str]) -> list[float] | list[list[float]]:
+async def get_embeddings(text_input: str | list[str]) -> list[float] | list[list[float]]:
     """
-    Generate embeddings for a single string or a list of strings using OpenAI.
+    Generate embeddings locally using FastEmbed.
     """
     start = time.time()
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text_input
-    )
+    
+    # Expects a list of strings
+    is_single_string = isinstance(text_input, str)
+    texts = [text_input] if is_single_string else text_input
+    
+    # Returns a generator of numpy arrays
+    embeddings_gen = model.embed(texts)
+    embeddings = [list(emb) for emb in embeddings_gen]
+    
     latency = (time.time() - start) * 1000
     metrics_store.record("embedding", latency)
     
-    if isinstance(text_input, str):
-        return response.data[0].embedding
-    return [e.embedding for e in response.data]
+    if is_single_string:
+        return embeddings[0]
+    
+    return embeddings

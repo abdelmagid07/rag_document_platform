@@ -4,10 +4,12 @@ uvicorn[standard]
 python-dotenv
 pydantic
 
-# Vector search (Restore FAISS)
-faiss-cpu
+# Vector search & Local Embeddings
+fastembed
 numpy
-openai
+
+# Generative AI
+google-genai
 
 # Document processing
 PyMuPDF

@@ -27,5 +27,10 @@ async def query_stream(request: QueryRequest):
     """
     return StreamingResponse(
         run_query_stream(request.query, request.top_k),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  
+        }
     )

@@ -11,15 +11,7 @@ from ..ingestion.vector_writer import write_vectors
 
 async def ingest_document(upload_file) -> str:
     """
-    Full ingestion pipeline:
-    1. Save uploaded file to temp location
-    2. Extract text using appropriate loader
-    3. Clean the text
-    4. Chunk into smaller pieces
-    5. Generate embeddings for each chunk
-    6. Store in vector store
-    
-    Returns the document_id.
+    Full ingestion pipeline 
     """
     document_id = str(uuid.uuid4())
 
@@ -40,8 +32,8 @@ async def ingest_document(upload_file) -> str:
         # Chunk
         chunks = chunk_text(text)
 
-        # Generate embeddings
-        embeddings = get_embeddings(chunks)
+        # Generate embeddings 
+        embeddings = await get_embeddings(chunks)
 
         # Store in vector store
         write_vectors(chunks, embeddings, document_id)

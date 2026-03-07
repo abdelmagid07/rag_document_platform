@@ -9,16 +9,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class Config:
-    # OpenAI API Key
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    USE_LOCAL_EMBEDDINGS = False
+    # API Keys
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
     # Chunking Settings
     CHUNK_SIZE = 500
     CHUNK_OVERLAP = 100
 
     # Vector Store
-    VECTOR_DIM = 1536  # OpenAI text-embedding-3-small
+    VECTOR_DIM = 384  # BGE-small-v1.5 
     INDEX_DIR = PROJECT_ROOT / "data" / "indexes"
     INDEX_PATH = INDEX_DIR / "faiss.index"
     METADATA_PATH = INDEX_DIR / "metadata.json"
@@ -27,7 +26,7 @@ class Config:
     DEFAULT_TOP_K = 5
 
     # LLM Settings
-    LLM_MODEL = "gpt-4o-mini"
+    LLM_MODEL = "gemini-3-flash-preview"
     LLM_TEMPERATURE = 0.2
     LLM_MAX_TOKENS = 1000
 

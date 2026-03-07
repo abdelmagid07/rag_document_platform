@@ -9,26 +9,23 @@ from ..services.logger import logger
 async def run_benchmark(sample_size: int = 10):
     """
     Run evaluation benchmark using HotpotQA dataset.
-    1. Loads HotpotQA subset
-    2. Ingests context into temporary vector store
-    3. Executes queries and calculates Recall@K and MRR
     """
     logger.info(f"Starting HotpotQA Benchmark (size={sample_size})...")
     
-    # Load HotpotQA (distractor setting contains context)
+    # Load HotpotQA (streaming)
     dataset = load_dataset("hotpot_qa", "distractor", split="validation", streaming=True)
     samples = list(dataset.take(sample_size))
 
-    # Initialize temporary vector store
-    temp_store = VectorStore(dim=1536)
+    # Initialize temporary vector store 
+    temp_store = VectorStore(dim=384)
     
-    # Preparation: Ingest all contexts for the samples
+    # Preparation: Ingest all contexts
     all_chunks = []
     all_metadata = []
     
     for i, sample in enumerate(samples):
-        # HotpotQA context is a list of [title, sentences]
-        for title, sentences in sample["context"]:
+        # HotpotQA context is a dict of lists
+        for title, sentences in zip(sample["context"]["title"], sample["context"]["sentences"]):
             full_text = " ".join(sentences)
             all_chunks.append(full_text)
             all_metadata.append({
@@ -36,8 +33,9 @@ async def run_benchmark(sample_size: int = 10):
                 "text": full_text
             })
 
-    logger.info(f"Ingesting {len(all_chunks)} context chunks for evaluation...")
-    embeddings = get_embeddings(all_chunks)
+    logger.info(f"Ingesting {len(all_chunks)} chunks...")
+    # Awaiting async embeddings
+    embeddings = await get_embeddings(all_chunks)
     temp_store.insert(embeddings, all_metadata)
 
     # Evaluation
@@ -46,20 +44,17 @@ async def run_benchmark(sample_size: int = 10):
     
     for sample in samples:
         query = sample["question"]
-        # Expected supporting facts titles
         relevant_titles = set(sample["supporting_facts"]["title"])
         
-        query_emb = get_embeddings(query)
+        # Awaiting async embeddings
+        query_emb = await get_embeddings(query)
         results = temp_store.search(query_emb, top_k=5)
         
-        # Check if retrieved titles match relevant titles
         retrieved_titles = [res["doc_id"].split("_", 2)[2] for res in results]
         
-        # Success criteria: did we find any of the supporting titles?
         recall = 1.0 if any(t in relevant_titles for t in retrieved_titles) else 0.0
         recalls.append(recall)
         
-        # Rank of the first relevant title
         rank = 0
         for idx, t in enumerate(retrieved_titles):
             if t in relevant_titles:
