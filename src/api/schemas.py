@@ -30,11 +30,10 @@ class DocumentMetadata(BaseModel):
 
 
 class EvaluationRequest(BaseModel):
-    dataset: str
-    top_k: int = 5
+    sample_size: int = 10
 
 
 class EvaluationResponse(BaseModel):
     recall_at_k: float
     mrr: float
-    avg_latency_ms: float
+    sample_size: int

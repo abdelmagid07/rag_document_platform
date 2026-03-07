@@ -1,8 +1,9 @@
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 import time
 
 from .schemas import QueryRequest, QueryResponse
-from ..services.query_service import run_query
+from ..services.query_service import run_query, run_query_stream
 
 router = APIRouter()
 
@@ -16,4 +17,15 @@ async def query(request: QueryRequest):
         answer=answer,
         sources=sources,
         latency_ms=latency
+    )
+
+
+@router.post("/stream")
+async def query_stream(request: QueryRequest):
+    """
+    SSE streaming endpoint for RAG queries.
+    """
+    return StreamingResponse(
+        run_query_stream(request.query, request.top_k),
+        media_type="text/event-stream"
     )

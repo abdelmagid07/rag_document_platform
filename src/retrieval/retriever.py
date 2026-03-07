@@ -8,4 +8,4 @@ def retrieve_documents(query_embedding: list[float], top_k: int = 5) -> list[dic
     Returns list of dicts with: doc_id, chunk_id, text, score
     """
     store = get_vector_store()
-    return store.search(embedding=query_embedding, top_k=top_k)
+    return store.search(query_embedding=query_embedding, top_k=top_k)

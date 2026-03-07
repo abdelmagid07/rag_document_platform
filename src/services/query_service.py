@@ -1,18 +1,47 @@
+import time
+import json
 from .embedding_service import get_embeddings
 from ..retrieval.retriever import retrieve_documents
-from ..generation.generator import generate_answer
+from ..generation.generator import generate_answer, generate_answer_stream
+from ..api.metrics import metrics_store
+from .logger import logger
 
 
 async def run_query(query: str, top_k: int):
-
+    start_total = time.time()
+    
     # Embed query
     query_embedding = get_embeddings(query)
 
     # Retrieve documents
+    start_retr = time.time()
     retrieved_docs = retrieve_documents(query_embedding, top_k)
+    retr_latency = (time.time() - start_retr) * 1000
+    metrics_store.record("retrieval", retr_latency)
 
     # Generate answer
-    answer = generate_answer(query, retrieved_docs)
+    start_gen = time.time()
+    answer = await generate_answer(query, retrieved_docs)
+    gen_latency = (time.time() - start_gen) * 1000
+    metrics_store.record("generation", gen_latency)
+
+    # Total Latency
+    total_latency = (time.time() - start_total) * 1000
+    metrics_store.record("total", total_latency)
+
+    # Structured Logging
+    logger.info(
+        f"Query processed: {query[:50]}...",
+        extra={"props": {
+            "query": query,
+            "top_k": top_k,
+            "retrieved_count": len(retrieved_docs),
+            "latency_total_ms": round(total_latency, 2),
+            "latency_retrieval_ms": round(retr_latency, 2),
+            "latency_generation_ms": round(gen_latency, 2),
+            "doc_ids": [doc["doc_id"] for doc in retrieved_docs]
+        }}
+    )
 
     # Format sources
     sources = []
@@ -24,3 +53,60 @@ async def run_query(query: str, top_k: int):
         })
 
     return answer, sources
+
+
+async def run_query_stream(query: str, top_k: int):
+    """
+    Asynchronous generator for SSE streaming.
+    Yields JSON-encoded strings.
+    """
+    start_total = time.time()
+    
+    # Embed query
+    query_embedding = get_embeddings(query)
+
+    # Retrieve documents
+    start_retr = time.time()
+    retrieved_docs = retrieve_documents(query_embedding, top_k)
+    retr_latency = (time.time() - start_retr) * 1000
+    metrics_store.record("retrieval", retr_latency)
+
+    # Yield sources immediately to UI
+    sources = [{
+        "doc_id": doc["doc_id"],
+        "text": doc["text"],
+        "score": doc["score"]
+    } for doc in retrieved_docs]
+    
+    yield f"data: {json.dumps({'sources': sources})}\n\n"
+
+    # Generate answer stream
+    start_gen = time.time()
+    full_answer = ""
+    async for token in generate_answer_stream(query, retrieved_docs):
+        full_answer += token
+        yield f"data: {json.dumps({'token': token})}\n\n"
+    
+    gen_latency = (time.time() - start_gen) * 1000
+    metrics_store.record("generation", gen_latency)
+
+    # Total Latency
+    total_latency = (time.time() - start_total) * 1000
+    metrics_store.record("total", total_latency)
+
+    # Final metadata event
+    yield f"data: {json.dumps({'latency_ms': round(total_latency, 2), 'done': True})}\n\n"
+
+    # Structured Logging (same as sync version)
+    logger.info(
+        f"Streamed query processed: {query[:50]}...",
+        extra={"props": {
+            "query": query,
+            "top_k": top_k,
+            "retrieved_count": len(retrieved_docs),
+            "latency_total_ms": round(total_latency, 2),
+            "latency_retrieval_ms": round(retr_latency, 2),
+            "latency_generation_ms": round(gen_latency, 2),
+            "doc_ids": [doc["doc_id"] for doc in retrieved_docs]
+        }}
+    )

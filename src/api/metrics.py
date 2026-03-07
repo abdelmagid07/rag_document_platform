@@ -1,48 +1,68 @@
 import time
-from collections import defaultdict
-import statistics
+import json
+from pathlib import Path
+from typing import Dict, List
 
+METRICS_FILE = Path("data/metrics.json")
 
-class LatencyTracker:
-    """Track query latency metrics (p50, p95, p99)."""
+class MetricsStore:
+    """Manages persistent metrics for the RAG platform."""
 
     def __init__(self):
-        self._latencies: list[float] = []
+        self.latencies: Dict[str, List[float]] = {
+            "total": [],
+            "embedding": [],
+            "retrieval": [],
+            "generation": []
+        }
+        self.load()
 
-    def record(self, latency_ms: float):
-        """Record a single latency measurement in milliseconds."""
-        self._latencies.append(latency_ms)
+    def record(self, stage: str, latency_ms: float):
+        if stage in self.latencies:
+            self.latencies[stage].append(latency_ms)
+            self.save()
 
-    def summary(self) -> dict:
-        """Return latency summary with p50, p95, p99 percentiles."""
-        if not self._latencies:
-            return {
-                "total_queries": 0,
-                "p50_ms": 0.0,
-                "p95_ms": 0.0,
-                "p99_ms": 0.0,
-            }
-        sorted_lat = sorted(self._latencies)
-        n = len(sorted_lat)
+    def get_percentiles(self, stage: str) -> dict:
+        data = self.latencies.get(stage, [])
+        if not data:
+            return {"count": 0, "p50": 0, "p95": 0, "p99": 0}
+        
+        sorted_data = sorted(data)
+        n = len(sorted_data)
         return {
-            "total_queries": n,
-            "p50_ms": round(sorted_lat[int(n * 0.50)], 2),
-            "p95_ms": round(sorted_lat[int(min(n * 0.95, n - 1))], 2),
-            "p99_ms": round(sorted_lat[int(min(n * 0.99, n - 1))], 2),
+            "count": n,
+            "p50": round(sorted_data[int(n * 0.50)], 2),
+            "p95": round(sorted_data[int(min(n * 0.95, n - 1))], 2),
+            "p99": round(sorted_data[int(min(n * 0.99, n - 1))], 2),
         }
 
+    def summary(self) -> dict:
+        return {stage: self.get_percentiles(stage) for stage in self.latencies}
 
-def recall_at_k(retrieved: list, relevant: list, k: int = 5) -> float:
-    """Compute Recall@k: fraction of relevant items found in top-k retrieved."""
-    top_k = retrieved[:k]
-    if not relevant:
-        return 0.0
-    return len(set(top_k) & set(relevant)) / len(relevant)
+    def save(self):
+        METRICS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(METRICS_FILE, "w") as f:
+            json.dump(self.latencies, f)
 
+    def load(self):
+        if METRICS_FILE.exists():
+            try:
+                with open(METRICS_FILE, "r") as f:
+                    self.latencies.update(json.load(f))
+            except Exception:
+                pass
 
-def mean_reciprocal_rank(retrieved: list, relevant: list) -> float:
-    """Compute MRR: reciprocal of the rank of the first relevant item."""
-    for i, item in enumerate(retrieved):
-        if item in relevant:
+# Singleton
+metrics_store = MetricsStore()
+
+def recall_at_k(retrieved_ids: list, relevant_ids: list, k: int = 5) -> float:
+    if not relevant_ids: return 0.0
+    top_k = set(retrieved_ids[:k])
+    matches = len(top_k.intersection(set(relevant_ids)))
+    return matches / len(relevant_ids)
+
+def mean_reciprocal_rank(retrieved_ids: list, relevant_ids: list) -> float:
+    for i, res_id in enumerate(retrieved_ids):
+        if res_id in relevant_ids:
             return 1.0 / (i + 1)
     return 0.0
