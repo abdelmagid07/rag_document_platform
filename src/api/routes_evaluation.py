@@ -8,12 +8,16 @@ router = APIRouter()
 async def run_eval(request: EvaluationRequest):
     """
     Trigger a HotpotQA benchmark run.
-    Note: this can take a minute as it pull datasets and generates embeddings.
     """
-    results = await run_benchmark(sample_size=request.sample_size)
-    
-    return EvaluationResponse(
-        recall_at_k=results["avg_recall_at_5"],
-        mrr=results["mrr"],
-        sample_size=results["sample_size"]
-    )
+    try:
+        results = await run_benchmark(sample_size=request.sample_size)
+        return EvaluationResponse(
+            recall_at_k=results["avg_recall_at_5"],
+            mrr=results["mrr"],
+            sample_size=results["sample_size"]
+        )
+    except Exception as e:
+        from ..services.logger import logger
+        logger.error(f"Evaluation failed: {str(e)}", exc_info=True)
+        # Re-raise to let FastAPI handle it but we've logged it
+        raise
