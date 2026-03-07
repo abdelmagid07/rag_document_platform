@@ -1,7 +1,7 @@
 import time
 import json
 from .embedding_service import get_embeddings
-from ..retrieval.retriever import retrieve_documents
+from ..retrieval.pg_vector_store import PgVectorStore
 from ..generation.generator import generate_answer, generate_answer_stream
 from ..api.metrics import metrics_store
 from .logger import logger
@@ -15,7 +15,7 @@ async def run_query(query: str, top_k: int):
 
     # Retrieve documents
     start_retr = time.time()
-    retrieved_docs = retrieve_documents(query_embedding, top_k)
+    retrieved_docs = await PgVectorStore.search(query_embedding, top_k)
     retr_latency = (time.time() - start_retr) * 1000
     metrics_store.record("retrieval", retr_latency)
 
@@ -64,7 +64,7 @@ async def run_query_stream(query: str, top_k: int):
 
     # Retrieve documents
     start_retr = time.time()
-    retrieved_docs = retrieve_documents(query_embedding, top_k)
+    retrieved_docs = await PgVectorStore.search(query_embedding, top_k)
     retr_latency = (time.time() - start_retr) * 1000
     metrics_store.record("retrieval", retr_latency)
 

@@ -35,8 +35,19 @@ async def ingest_document(upload_file) -> str:
         # Generate embeddings 
         embeddings = await get_embeddings(chunks)
 
-        # Store in vector store
-        write_vectors(chunks, embeddings, document_id)
+        # Store in PostgreSQL
+        from .database import Database
+        from ..retrieval.pg_vector_store import PgVectorStore
+        
+        # Insert Document Metadata
+        await Database.execute(
+            "INSERT INTO documents (id, filename) VALUES ($1, $2)",
+            document_id, upload_file.filename
+        )
+        
+        # Insert Chunks and Embeddings
+        metadata = [{"text": chunk} for chunk in chunks]
+        await PgVectorStore.insert(embeddings, metadata, document_id)
 
     finally:
         # Clean up temp file

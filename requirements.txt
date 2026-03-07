@@ -7,6 +7,8 @@ pydantic
 # Vector search & Local Embeddings
 fastembed
 numpy
+asyncpg
+pgvector
 
 # Generative AI
 google-genai

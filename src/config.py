@@ -22,6 +22,9 @@ class Config:
     INDEX_PATH = INDEX_DIR / "faiss.index"
     METADATA_PATH = INDEX_DIR / "metadata.json"
 
+    # Database Settings
+    DB_URL = os.getenv("DATABASE_URL")
+
     # Retrieval Settings
     DEFAULT_TOP_K = 5
 
