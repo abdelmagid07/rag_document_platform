@@ -1,0 +1,34 @@
+# Environment
+.env
+.env.local
+.venv/
+env/
+venv/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Data (RAG Specific)
+data/indexes/
+data/pdfs/
+data/logs/
+*.index
+*.json
+temp_*.pdf
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.egg-info/

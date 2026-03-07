@@ -1,0 +1,256 @@
+AI Document Retrieval Platform (RAG System)
+
+Project Goal:
+Build a production-style Retrieval-Augmented Generation (RAG) system that ingests large document sets and supports efficient retrieval, evaluation, and latency tracking—a “mini internal ML platform” for document intelligence.
+
+This project is extremely valuable because it combines ML, backend engineering, and data engineering skills in a real-world scenario.
+
+1. Project Overview
+
+Input: PDFs, Word docs, CSVs, or other textual content.
+
+Processing: Extract text → split into chunks → generate embeddings → store in vector database.
+
+Query Handling: Users send natural language queries → system retrieves relevant chunks → optional generation (answer synthesis) via LLM.
+
+Output: Retrieved documents, summaries, or answers with metrics.
+
+Why this is high-value:
+
+Demonstrates real-world ML system engineering.
+
+Involves vector search, embeddings, and evaluation metrics.
+
+Scales to large document corpora (100k+ documents).
+
+Offers metrics for monitoring system performance (latency, recall).
+
+2. Procedure / Step-by-Step Development
+Phase 1: Document Ingestion
+
+File ingestion pipeline
+
+Support PDFs, DOCX, CSV, and TXT.
+
+Store original documents in S3 / local storage.
+
+Extract text using libraries like PyPDF2, pdfplumber, python-docx.
+
+Text preprocessing
+
+Clean text (remove headers, footers, page numbers).
+
+Optional: language detection, stopword removal, stemming/lemmatization.
+
+Chunking
+
+Split documents into semantic chunks (e.g., 500–1000 tokens).
+
+Track chunk metadata: document ID, page, offset, chunk ID.
+
+Evaluate chunk size tradeoffs: larger chunks → fewer vectors but lower retrieval granularity; smaller chunks → more vectors, higher retrieval accuracy.
+
+Embedding generation
+
+Use OpenAI embeddings (text-embedding-ada-002) or local model (e.g., sentence-transformers).
+
+Generate vector representation for each chunk.
+
+Phase 2: Vector Storage
+
+Choose vector store
+
+Options: FAISS, Chroma, Milvus, pgvector (PostgreSQL extension).
+
+Store embeddings + metadata.
+
+Indexing strategies
+
+Flat index (high accuracy, slower).
+
+IVF or HNSW index (faster retrieval, slight accuracy tradeoff).
+
+Handle incremental updates: allow new documents without full rebuild.
+
+Metadata storage
+
+PostgreSQL to store document info, chunk mapping, and retrieval stats.
+
+Phase 3: Retrieval + Generation API
+
+Query ingestion
+
+Accept natural language queries via FastAPI.
+
+Preprocess query and generate embedding.
+
+Vector search
+
+Retrieve top-k relevant chunks (Recall@k).
+
+Experiment with distance metrics (cosine vs Euclidean).
+
+LLM generation (optional)
+
+Combine retrieved chunks as context.
+
+Generate answer via OpenAI API or local LLM.
+
+Response structure
+
+Include top chunks, source metadata, and LLM answer.
+
+Phase 4: Evaluation Framework
+
+Accuracy metrics
+
+Recall@k, Mean Reciprocal Rank (MRR), Precision@k.
+
+Track relevance of retrieved chunks via annotated dataset.
+
+Latency metrics
+
+Track p50, p95, p99 query latency.
+
+Identify bottlenecks: embedding generation, retrieval, generation.
+
+Logging & monitoring
+
+Store query logs + metrics in PostgreSQL.
+
+Optionally integrate with Grafana / Prometheus.
+
+Phase 5: Deployment
+
+Backend API
+
+Use FastAPI for query endpoints.
+
+Containerize with Docker.
+
+Optional frontend
+
+Minimal web UI for testing queries (React or Streamlit).
+
+Scalability considerations
+
+Batch embedding updates.
+
+Asynchronous retrieval + generation.
+
+3. Deliverables
+
+Core system
+
+PDF/Doc ingestion pipeline.
+
+Chunking + embeddings + vector storage.
+
+FastAPI retrieval API with query handling.
+
+Metrics & evaluation
+
+Recall@k, MRR, p50/p95 latency metrics.
+
+Query logging system.
+
+Documentation
+
+Setup instructions, architecture diagram, evaluation guide.
+
+Recommendations for chunk size, index type, and update strategy.
+
+Optional extensions
+
+Semantic search with filters (date, author, type).
+
+Dashboard for metrics visualization.
+
+Integration with local LLMs for offline generation.
+
+4. Tech Stack
+Component	Recommendation
+Backend API	FastAPI (Python)
+Vector database	FAISS, Chroma, or pgvector
+Metadata	PostgreSQL
+Embeddings	OpenAI text-embedding-ada-002 or sentence-transformers
+Document processing	PyPDF2, pdfplumber, python-docx
+Containerization	Docker
+Optional UI	Streamlit or React
+Monitoring	Prometheus / Grafana (optional)
+5. Infra & System Considerations
+
+Chunk size tradeoffs: 500–1000 tokens typically balance retrieval granularity and index size.
+
+Index rebuild vs incremental: Incremental updates reduce downtime but may slightly reduce retrieval quality.
+
+Query latency: Optimize embeddings + FAISS index type. Track p50, p95 latency.
+
+Retrieval accuracy: Tune Recall@k, MRR; experiment with distance metrics.
+
+Scaling:
+
+Batch embedding generation.
+
+Parallel retrieval.
+
+Async LLM calls for multi-query support.
+
+6. Deep Learning / ML Knowledge to Study
+
+Vector representations & embeddings.
+
+Semantic search & similarity metrics.
+
+LLM prompting & context window limitations.
+
+RAG (Retrieval-Augmented Generation) system design.
+
+Evaluation metrics for retrieval (Recall@k, MRR).
+
+Index structures (FAISS: Flat, HNSW, IVF).
+
+Tradeoffs: latency vs accuracy, index size vs retrieval quality.
+
+7. Optional Advanced Enhancements
+
+Active learning: Collect user feedback to improve retrieval.
+
+Hybrid retrieval: Combine sparse (BM25) + dense (embeddings) search.
+
+Fine-tuned embeddings: Domain-specific embedding models.
+
+Streaming responses: Send partial LLM answers as they generate.
+
+Vector compression / quantization: Reduce storage and speed up search.
+
+
+Final src Structure:
+
+src/
+
+api/
+    app.py
+    routes_documents.py
+    routes_query.py
+    routes_evaluation.py
+    schemas.py
+
+services/
+    ingestion_service.py
+    query_service.py
+
+ingestion/
+    document_loader.py
+    text_cleaner.py
+    chunker.py
+    embedder.py
+    vector_writer.py
+
+retrieval/
+    embedder.py
+    retriever.py
+    vector_store.py
+
+generation/
+    generator.py

@@ -1,11 +1,17 @@
+# Core framework
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
-numpy
+pydantic
+
+# Vector search (Restore FAISS)
 faiss-cpu
+numpy
 openai
-sentence-transformers
+
+# Document processing
 PyMuPDF
-pytesseract
-Pillow
+
+# Testing
 pytest
+httpx

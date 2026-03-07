@@ -1,4 +1,4 @@
-from ..retrieval.embedder import embed_query
+from .embedding_service import get_embeddings
 from ..retrieval.retriever import retrieve_documents
 from ..generation.generator import generate_answer
 
@@ -6,7 +6,7 @@ from ..generation.generator import generate_answer
 async def run_query(query: str, top_k: int):
 
     # Embed query
-    query_embedding = embed_query(query)
+    query_embedding = get_embeddings(query)
 
     # Retrieve documents
     retrieved_docs = retrieve_documents(query_embedding, top_k)
