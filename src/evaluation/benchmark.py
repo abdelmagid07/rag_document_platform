@@ -1,162 +1,183 @@
-import time
 import asyncio
+import time
 import numpy as np
-
 from datasets import load_dataset
-from ..services.embedding_service import get_embeddings
-from ..retrieval.vector_store import VectorStore
-from ..api.metrics import recall_at_k, mean_reciprocal_rank
-from ..services.logger import logger
+from collections import defaultdict
 
-async def run_benchmark(sample_size: int = 25):
-    """
-    Highly optimized evaluation benchmark.
-    Uses batch embedding and matrix math for speed.
-    """
-    logger.info(f"Starting HotpotQA Benchmark (size={sample_size})...")
-    start_bench = time.time()
-    
-    # 1. Load Dataset (Streaming)
-    dataset = load_dataset("hotpot_qa", "distractor", split="validation", streaming=True)
-    
-    # Efficiently take samples
+from src.services.embedding_service import get_embeddings
+from src.retrieval.pg_vector_store import PgVectorStore
+from src.services.database import Database
+from src.services.logger import logger
+
+
+TOP_K = 5
+EMBED_BATCH = 256
+
+
+def recall_at_k(relevant, retrieved, k):
+    retrieved = retrieved[:k]
+    return len(set(relevant) & set(retrieved)) / len(relevant)
+
+
+def mean_reciprocal_rank(relevant, retrieved):
+    for i, r in enumerate(retrieved):
+        if r in relevant:
+            return 1.0 / (i + 1)
+    return 0.0
+
+
+async def batch_embed(texts, batch_size=EMBED_BATCH):
+    embeddings = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        emb = await get_embeddings(batch)
+        embeddings.append(emb)
+    return np.vstack(embeddings)
+
+
+async def run_benchmark(sample_size=500):
+
+    logger.info(f"Starting HotpotQA Benchmark (n={sample_size})")
+    start = time.time()
+
+    dataset = load_dataset(
+        "hotpot_qa",
+        "distractor",
+        split="validation",
+        streaming=True
+    )
+
     samples = []
-    logger.info(f"Fetching {sample_size} samples from HotpotQA...")
-    for i, item in enumerate(dataset):
+    for item in dataset:
         samples.append(item)
         if len(samples) >= sample_size:
             break
-            
-    logger.info(f"Dataset loaded: {len(samples)} samples.")
 
-    # Extract Contexts and Batch Embed
-    all_chunks = []
-    chunk_metadata = []
+    logger.info(f"Loaded {len(samples)} queries")
+
+    # Build Corpus
+    corpus_chunks = []
+    metadata = []
+
     for i, sample in enumerate(samples):
-        for title, sentences in zip(sample["context"]["title"], sample["context"]["sentences"]):
+        for title, sentences in zip(
+            sample["context"]["title"],
+            sample["context"]["sentences"]
+        ):
+
             text = " ".join(sentences)
-            all_chunks.append(text)
-            chunk_metadata.append({"title": title, "sample_idx": i})
 
-    logger.info(f"Generating embeddings for {len(all_chunks)} chunks in batches...")
-    # Sub-batch to prevent large memory spikes or hangs
-    sub_batch_size = 500
-    all_corpus_embeddings = []
-    for j in range(0, len(all_chunks), sub_batch_size):
-        batch_texts = all_chunks[j:j + sub_batch_size]
-        logger.info(f"Embedding chunk batch {j // sub_batch_size + 1}/{(len(all_chunks) // sub_batch_size) + 1}...")
-        batch_emb = await get_embeddings(batch_texts)
-        all_corpus_embeddings.append(batch_emb)
-    
-    corpus_matrix = np.vstack(all_corpus_embeddings)
+            corpus_chunks.append(text)
 
-    # Store in temporary Postgres table for evaluation
-    from src.retrieval.pg_vector_store import PgVectorStore
-    from src.services.database import Database
-    import uuid
-    import hashlib
-    
-    logger.info("Clearing previous benchmark data...")
-    # Clean up benchmark documents
-    await Database.execute("DELETE FROM chunks WHERE document_id IN (SELECT id FROM documents WHERE filename = 'benchmark_eval')")
-    await Database.execute("DELETE FROM documents WHERE filename = 'benchmark_eval'")
+            metadata.append({
+                "title": title,
+                "sample_idx": i
+            })
 
-    logger.info(f"Ingesting {len(all_chunks)} eval chunks into Postgres...")
-    
-    # Track title to UUID mapping for recall verification
-    doc_id_to_title = {}
-    
-    # Pre-group chunks by document to enable batch inserts
-    from collections import defaultdict
-    docs_to_ingest = defaultdict(list) # doc_uuid -> list of (embedding, text)
-    
-    for i, meta in enumerate(chunk_metadata):
-        title = meta['title']
-        doc_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, title))
-        docs_to_ingest[doc_uuid].append((corpus_matrix[i], all_chunks[i]))
-        doc_id_to_title[doc_uuid] = title
+    logger.info(f"Corpus size: {len(corpus_chunks)} chunks")
 
-    logger.info(f"Ingesting into {len(docs_to_ingest)} documents...")
-    
-    # Insert document metadata in one batch
-    doc_metadata = [(uid, "benchmark_eval") for uid in doc_id_to_title.keys()]
-    await Database.executemany(
-        "INSERT INTO documents (id, filename) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-        doc_metadata
+    # Embed Corpus
+    logger.info("Embedding corpus...")
+    corpus_embeddings = await batch_embed(corpus_chunks)
+
+    # Reset Benchmark Tables
+    await Database.execute(
+        "DELETE FROM chunks WHERE document_id IN (SELECT id FROM documents WHERE filename='benchmark')"
     )
 
-    # Insert chunks in document-level batches
-    for doc_uuid, items in docs_to_ingest.items():
-        embs = np.array([item[0] for item in items])
-        meta = [{"text": item[1]} for item in items]
-        await PgVectorStore.insert(embs, meta, doc_uuid)
+    await Database.execute(
+        "DELETE FROM documents WHERE filename='benchmark'"
+    )
 
-    # Batch Embed Queries
+    # Insert Documents
+    import uuid
+
+    doc_map = {}
+    grouped = defaultdict(list)
+
+    for i, meta in enumerate(metadata):
+
+        title = meta["title"]
+
+        doc_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, title))
+
+        doc_map[doc_id] = title
+
+        grouped[doc_id].append((corpus_embeddings[i], corpus_chunks[i]))
+
+    logger.info(f"Inserting {len(grouped)} documents")
+
+    docs = [(doc_id, "benchmark") for doc_id in doc_map.keys()]
+
+    await Database.executemany(
+        "INSERT INTO documents (id, filename) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+        docs
+    )
+
+    for doc_id, rows in grouped.items():
+
+        embs = np.array([r[0] for r in rows])
+
+        meta = [{"text": r[1]} for r in rows]
+
+        await PgVectorStore.insert(embs, meta, doc_id)
+
+    # Embed Queries
     questions = [s["question"] for s in samples]
-    logger.info(f"Generating embeddings for {len(questions)} queries...")
-    query_matrix = await get_embeddings(questions)
 
-    # Search in Postgres and Calculate Metrics
-    logger.info("Performing similarity search in Postgres...")
+    logger.info("Embedding queries...")
+
+    query_embeddings = await batch_embed(questions)
+
+
+    # Evaluation
     recalls = []
     mrrs = []
-    
-    for i, sample in enumerate(samples):
-        if i % 20 == 0:
-            logger.info(f"Processing sample {i}/{len(samples)}...")
-            
-        relevant_titles = set(sample["supporting_facts"]["title"])
-        
-        # Search using PgVectorStore
-        results = await PgVectorStore.search(query_matrix[i], top_k=5)
-        
-        # Debug: check first result
-        if results:
-            first = results[0]
-            logger.info(f"Query {i} top result: score={first['score']:.4f}, doc_id={first['doc_id']}")
-        
-        # Look up title from our local mapping
-        retrieved_titles = [doc_id_to_title.get(res["doc_id"]) for res in results]
-        
-        # Debug: log retrieved titles
-        valid_titles = [t for t in retrieved_titles if t]
-        logger.info(f"Query {i} retrieved titles: {valid_titles}")
-        logger.info(f"Query {i} relevant titles: {list(relevant_titles)}")
 
-        # Filter out any None values
-        retrieved_titles = valid_titles
-        
-        # Recall@5
-        recall = 1.0 if any(t in relevant_titles for t in retrieved_titles) else 0.0
-        recalls.append(recall)
-        
-        # MRR
-        mrr = 0.0
-        for rank, t in enumerate(retrieved_titles):
-            if rank < 5:  # Consider only top 5 as before
-                if t in relevant_titles:
-                    mrr = 1.0 / (rank + 1)
-                    break
+    for i, sample in enumerate(samples):
+
+        relevant_titles = set(sample["supporting_facts"]["title"])
+
+        results = await PgVectorStore.search(
+            query_embeddings[i],
+            top_k=TOP_K
+        )
+
+        retrieved_titles = [
+            doc_map.get(r["doc_id"])
+            for r in results
+            if r["doc_id"] in doc_map
+        ]
+
+        rec = recall_at_k(relevant_titles, retrieved_titles, TOP_K)
+
+        mrr = mean_reciprocal_rank(relevant_titles, retrieved_titles)
+
+        recalls.append(rec)
         mrrs.append(mrr)
 
-    avg_recall = sum(recalls) / len(recalls)
-    avg_mrr = sum(mrrs) / len(mrrs)
-    total_time = time.time() - start_bench
+    avg_recall = np.mean(recalls)
+    avg_mrr = np.mean(mrrs)
 
-    logger.info(f"Benchmark Complete in {total_time:.1f}s. Recall@5: {avg_recall:.2f}, MRR: {avg_mrr:.2f}")
-    
+    runtime = time.time() - start
+
+    logger.info("Benchmark Complete")
+    logger.info(f"Recall@{TOP_K}: {avg_recall:.4f}")
+    logger.info(f"MRR: {avg_mrr:.4f}")
+    logger.info(f"Runtime: {runtime:.2f}s")
+
     return {
-        "sample_size": sample_size,
-        "avg_recall_at_5": round(avg_recall, 4),
-        "mrr": round(avg_mrr, 4),
-        "total_time_sec": round(total_time, 2)
+        "samples": sample_size,
+        "recall@5": float(avg_recall),
+        "mrr": float(avg_mrr),
+        "runtime_sec": runtime
     }
 
+
 if __name__ == "__main__":
-    import asyncio
+
     import sys
-    
-    # Allow passing sample size as an argument
-    size = int(sys.argv[1]) if len(sys.argv) > 1 else 5
-    
+
+    size = int(sys.argv[1]) if len(sys.argv) > 1 else 500
+
     asyncio.run(run_benchmark(size))
