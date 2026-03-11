@@ -25,6 +25,10 @@ class Config:
     # Database Settings
     DB_URL = os.getenv("DATABASE_URL")
 
+    # Redis Settings
+    REDIS_URL = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
+    CACHE_TTL = 3600  # 1 hour
+
     # Retrieval Settings
     DEFAULT_TOP_K = 5
 

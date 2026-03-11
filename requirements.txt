@@ -9,6 +9,8 @@ fastembed
 numpy
 asyncpg
 pgvector
+redis
+cachetools
 
 # Generative AI
 google-genai
