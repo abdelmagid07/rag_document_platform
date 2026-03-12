@@ -30,7 +30,7 @@ jobs:
             
             # Force Docker Compose to rebuild the API image with the new code
             # and restart the container in detached mode (-d)
-            docker-compose up -d --build api
+            docker compose up -d --build api
             
             # Clean up old/unused Docker images to save disk space
             docker image prune -f
