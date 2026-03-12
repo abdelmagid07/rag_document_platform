@@ -1,0 +1,36 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}        
+          username: ec2-user                   
+          key: ${{ secrets.EC2_SSH_KEY }}      
+
+
+          script: |
+            # Navigate to the project folder
+            cd ~/rag_document_platform
+            
+            # Pull the latest code from GitHub
+            git pull origin main
+            
+            # Force Docker Compose to rebuild the API image with the new code
+            # and restart the container in detached mode (-d)
+            docker-compose up -d --build api
+            
+            # Clean up old/unused Docker images to save disk space
+            docker image prune -f
