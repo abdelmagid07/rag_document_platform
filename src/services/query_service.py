@@ -23,7 +23,7 @@ async def run_query(query: str, top_k: int):
 
     # Retrieve documents 
     start_retr = time.time()
-    retrieved_docs = await PgVectorStore.search(query, query_embedding, top_k)
+    retrieved_docs = await PgVectorStore.search(query_embedding, top_k)
     retr_latency = (time.time() - start_retr) * 1000
     metrics_store.record("retrieval", retr_latency)
 
@@ -84,7 +84,7 @@ async def run_query_stream(query: str, top_k: int):
 
     # Retrieve documents 
     start_retr = time.time()
-    retrieved_docs = await PgVectorStore.search(query, query_embedding, top_k)
+    retrieved_docs = await PgVectorStore.search(query_embedding, top_k)
     retr_latency = (time.time() - start_retr) * 1000
     metrics_store.record("retrieval", retr_latency)
 
