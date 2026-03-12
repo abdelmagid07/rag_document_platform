@@ -1,6 +1,6 @@
 # RAG Document Platform
 
-Production-style Retrieval-Augmented Generation (RAG) scaffold for document ingestion, chunking, embedding, retrieval, and API/UI integration.
+Retrieval-Augmented Generation (RAG) scaffold for document ingestion, chunking, embedding, retrieval, and API/UI integration.
 
 ## Repository Layout
 
@@ -21,3 +21,5 @@ pip install -r requirements.txt
 cp .env.example .env
 uvicorn src.api.fastapi_app:app --reload
 ```
+
+## AWS test
