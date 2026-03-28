@@ -40,16 +40,17 @@ class PgVectorStore:
     async def search(cls, query_embedding: np.ndarray, top_k: int = 5, user_id: str = None) -> List[Dict]:
         """
         Perform similarity search using pgvector (<=> operator for cosine distance).
-        Filters by user_id to ensure multi-tenant isolation.
+        Filters by user_id and joins with documents table to get filenames.
         """
         pool = await Database.get_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT document_id, content, 1 - (embedding <=> $1) as similarity 
-                FROM chunks 
-                WHERE user_id = $3
-                ORDER BY embedding <=> $1 
+                SELECT c.document_id, d.filename, c.content, 1 - (c.embedding <=> $1) as similarity 
+                FROM chunks c
+                JOIN documents d ON c.document_id = d.id
+                WHERE c.user_id = $3
+                ORDER BY c.embedding <=> $1 
                 LIMIT $2
                 """,
                 query_embedding,
@@ -61,6 +62,7 @@ class PgVectorStore:
             for row in rows:
                 results.append({
                     "doc_id": str(row["document_id"]),
+                    "filename": row["filename"],
                     "text": row["content"],
                     "score": float(row["similarity"])
                 })

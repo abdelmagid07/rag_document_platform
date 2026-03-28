@@ -37,6 +37,7 @@ async def run_query(query: str, top_k: int, user_id: str):
     # Format sources
     sources = [{
         "doc_id": doc["doc_id"],
+        "filename": doc.get("filename", "Document"),
         "text": doc["text"],
         "score": doc["score"]
     } for doc in retrieved_docs]
@@ -115,6 +116,7 @@ async def run_query_stream(query: str, top_k: int, user_id: str):
     # Format complete sources for caching
     sources = [{
         "doc_id": doc["doc_id"],
+        "filename": doc.get("filename", "Document"),
         "text": doc["text"],
         "score": doc["score"]
     } for doc in retrieved_docs]

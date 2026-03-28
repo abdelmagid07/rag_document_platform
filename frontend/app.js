@@ -22,7 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const latencyMetric = document.getElementById('latency-metric');
 
     // API Base URL
-    const API_BASE = 'http://18.219.12.24:8080';
+    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? 'http://127.0.0.1:8080' 
+        : `http://${window.location.hostname}:8080`;
 
     // File Upload Handling
     const handleDragEvent = (e) => {
@@ -143,15 +145,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const badge = document.createElement('div');
             badge.className = 'source-badge';
 
-            // Extract filename if it's a path
-            let filename = source.document_id;
-            if (filename && filename.includes('/')) {
-                filename = filename.substring(filename.lastIndexOf('/') + 1);
-            } else if (filename && filename.includes('\\')) {
-                filename = filename.substring(filename.lastIndexOf('\\') + 1);
-            }
+            const name = source.filename || 'Document';
 
-            badge.innerHTML = `<i class="fa-solid fa-file-lines"></i> ${filename || 'Document'} (Score: ${(source.score).toFixed(2)})`;
+            badge.innerHTML = `<i class="fa-solid fa-file-lines"></i> ${name} (Score: ${(source.score).toFixed(2)})`;
             sourcesDiv.appendChild(badge);
         });
 
