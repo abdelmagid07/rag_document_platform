@@ -11,7 +11,7 @@ router = APIRouter()
 @router.post("/", response_model=QueryResponse)
 async def query(request: QueryRequest):
     start = time.time()
-    answer, sources = await run_query(request.query, request.top_k)
+    answer, sources = await run_query(request.query, request.top_k, request.user_id)
     latency = (time.time() - start) * 1000
     return QueryResponse(
         answer=answer,
@@ -26,7 +26,7 @@ async def query_stream(request: QueryRequest):
     SSE streaming endpoint for RAG queries.
     """
     return StreamingResponse(
-        run_query_stream(request.query, request.top_k),
+        run_query_stream(request.query, request.top_k, request.user_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

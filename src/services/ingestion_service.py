@@ -9,7 +9,7 @@ from .embedding_service import get_embeddings
 from ..ingestion.vector_writer import write_vectors
 
 
-async def ingest_document(upload_file) -> str:
+async def ingest_document(upload_file, user_id: str) -> str:
     """
     Full ingestion pipeline 
     """
@@ -41,13 +41,13 @@ async def ingest_document(upload_file) -> str:
         
         # Insert Document Metadata
         await Database.execute(
-            "INSERT INTO documents (id, filename) VALUES ($1, $2)",
-            document_id, upload_file.filename
+            "INSERT INTO documents (id, user_id, filename) VALUES ($1, $2, $3)",
+            document_id, user_id, upload_file.filename
         )
         
         # Insert Chunks and Embeddings
         metadata = [{"text": chunk} for chunk in chunks]
-        await PgVectorStore.insert(embeddings, metadata, document_id)
+        await PgVectorStore.insert(embeddings, metadata, document_id, user_id)
 
     finally:
         # Clean up temp file

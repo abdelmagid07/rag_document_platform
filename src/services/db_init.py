@@ -18,6 +18,7 @@ async def init_db():
     await Database.execute("""
         CREATE TABLE IF NOT EXISTS documents (
             id UUID PRIMARY KEY,
+            user_id TEXT NOT NULL,
             filename TEXT,
             created_at TIMESTAMP DEFAULT NOW()
         );
@@ -28,12 +29,32 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS chunks (
             id SERIAL PRIMARY KEY,
             document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
             chunk_index INTEGER,
             content TEXT NOT NULL,
             embedding VECTOR(384)
         );
     """)
 
+    # Vector Index (HNSW)
+    await Database.execute("""
+        CREATE INDEX IF NOT EXISTS idx_chunks_embedding 
+        ON chunks USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64);
+    """)
+
+    # B-Tree index for foreign key efficiency
+    await Database.execute("""
+        CREATE INDEX IF NOT EXISTS idx_chunks_doc_id ON chunks (document_id);
+    """)
+
+    # B-Tree indexes for user_id filtering
+    await Database.execute("""
+        CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents (user_id);
+    """)
+    await Database.execute("""
+        CREATE INDEX IF NOT EXISTS idx_chunks_user_id ON chunks (user_id);
+    """)
 
     logger.info("Database initialized successfully.")
 

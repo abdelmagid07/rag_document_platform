@@ -52,49 +52,78 @@
 </head>
 
 <body>
+
     <h2>RAG Streaming Test</h2>
     <div class="status" id="status">Ready</div>
+    <input type="text" id="user_id" value="test-user-1" placeholder="User ID" style="margin-bottom: 5px;" />
     <input type="text" id="query" value="What is the experience at Hawl Technologies?" />
     <button onclick="runQuery()">Run Stream Query</button>
-    <p>Output:</p>
+    
+    <div id="sources-container" style="display: none; margin-top: 20px;">
+        <p style="font-weight: bold; font-size: 0.9em; margin-bottom: 8px; color: #94a3b8;">Retrieved Sources:</p>
+        <div id="sources" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+    </div>
+
+    <p style="margin-top: 20px; font-weight: bold; color: #94a3b8;">Generator Output:</p>
     <div id="output"></div>
 
     <script>
         async function runQuery() {
             const query = document.getElementById('query').value;
+            const userId = document.getElementById('user_id').value;
             const output = document.getElementById('output');
             const status = document.getElementById('status');
+            const sourcesDiv = document.getElementById('sources');
+            const sourcesContainer = document.getElementById('sources-container');
+            
             output.innerText = "";
+            sourcesDiv.innerHTML = "";
+            sourcesContainer.style.display = "none";
             status.innerText = "Connecting...";
 
             try {
-                // UPDATE PORT HERE FOR TESTING
-                const response = await fetch('http://127.0.0.1:8090/query/stream', {
+                const response = await fetch('http://127.0.0.1:8080/query/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query, top_k: 3 })
+                    body: JSON.stringify({ query: query, user_id: userId, top_k: 3 })
                 });
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-
+                let buffer = '';
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+
+                    buffer = lines.pop(); // Keep partial line
 
                     for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.substring(6));
-                            if (data.status) {
-                                status.innerText = "Status: " + data.status;
-                            } else if (data.token) {
-                                output.innerText += data.token;
-                                status.innerText = "Streaming answer...";
-                            } else if (data.done) {
-                                status.innerText = `Done in ${data.latency_ms}ms`;
+                        if (line.trim().startsWith('data: ')) {
+                            const dataStr = line.trim().substring(6).trim();
+                            if (!dataStr) continue;
+                            try {
+                                const data = JSON.parse(dataStr);
+                                if (data.status) {
+                                    status.innerText = "Status: " + data.status;
+                                } else if (data.sources) {
+                                    sourcesContainer.style.display = "block";
+                                    sourcesDiv.innerHTML = data.sources.map(s => `
+                                        <div style="background: #1e293b; border: 1px solid #334155; padding: 8px 12px; border-radius: 6px; font-size: 0.8em; color: #cbd5e1;">
+                                            DOC[${s.doc_id.slice(0, 6)}...] (Score: ${s.score.toFixed(3)})
+                                        </div>
+                                    `).join('');
+                                    status.innerText = "Sources retrieved. Generating...";
+                                } else if (data.token) {
+                                    output.innerText += data.token;
+                                    status.innerText = "Generating answer...";
+                                } else if (data.done) {
+                                    status.innerText = `Done in ${data.latency_ms}ms (Total)`;
+                                }
+                            } catch (e) {
+                                console.error("Failed to parse", e);
                             }
                         }
                     }

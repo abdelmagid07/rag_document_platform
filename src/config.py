@@ -33,7 +33,7 @@ class Config:
     DEFAULT_TOP_K = 5
 
     # LLM Settings
-    LLM_MODEL = "gemini-3-flash-preview"
+    LLM_MODEL = "gemini-2.5-flash-lite"
     LLM_TEMPERATURE = 0.2
     LLM_MAX_TOKENS = 1000
 

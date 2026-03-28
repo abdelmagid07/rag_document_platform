@@ -8,11 +8,11 @@ from .cache_service import CacheService
 from .logger import logger
 
 
-async def run_query(query: str, top_k: int):
+async def run_query(query: str, top_k: int, user_id: str):
     start_total = time.time()
     
     # Check Cache
-    cache_key = CacheService.generate_key(query)
+    cache_key = CacheService.generate_key(f"{user_id}:{query}")
     cached_result = await CacheService.get(cache_key)
     if cached_result:
         logger.info(f"Cache hit for query: {query[:50]}...")
@@ -23,7 +23,7 @@ async def run_query(query: str, top_k: int):
 
     # Retrieve documents
     start_retr = time.time()
-    retrieved_docs = await PgVectorStore.search(query_embedding, top_k)
+    retrieved_docs = await PgVectorStore.search(query_embedding, top_k, user_id)
     retr_latency = (time.time() - start_retr) * 1000
     metrics_store.record("retrieval", retr_latency)
 
@@ -60,14 +60,14 @@ async def run_query(query: str, top_k: int):
     return answer, sources
 
 
-async def run_query_stream(query: str, top_k: int):
+async def run_query_stream(query: str, top_k: int, user_id: str):
     """
     Asynchronous generator for SSE streaming with caching support.
     """
     yield f"data: {json.dumps({'status': 'searching'})}\n\n"
     
     # Check Cache
-    cache_key = CacheService.generate_key(query)
+    cache_key = CacheService.generate_key(f"{user_id}:{query}")
     cached_result = await CacheService.get(cache_key)
     if cached_result:
         logger.info(f"Cache hit (stream) for query: {query[:50]}...")
@@ -80,32 +80,44 @@ async def run_query_stream(query: str, top_k: int):
     start_total = time.time()
     
     # Embed query
+    _s = time.time()
     query_embedding = await get_embeddings(query)
+    logger.info(f"Embedding took: {(time.time() - _s)*1000:.2f}ms")
 
     # Retrieve documents
     start_retr = time.time()
-    retrieved_docs = await PgVectorStore.search(query_embedding, top_k)
+    retrieved_docs = await PgVectorStore.search(query_embedding, top_k, user_id)
     retr_latency = (time.time() - start_retr) * 1000
     metrics_store.record("retrieval", retr_latency)
+    logger.info(f"DB Search took: {retr_latency:.2f}ms")
 
-    # Yield sources immediately to UI
-    sources = [{
+    # Yield sources immediately to UI (excluding text so payload is small)
+    ui_sources = [{
         "doc_id": doc["doc_id"],
-        "text": doc["text"],
         "score": doc["score"]
     } for doc in retrieved_docs]
     
-    yield f"data: {json.dumps({'sources': sources})}\n\n"
+    yield f"data: {json.dumps({'sources': ui_sources})}\n\n"
 
     # Generate answer stream
     full_answer_parts = []
+    start_gen = time.time()
     async for token in generate_answer_stream(query, retrieved_docs):
+        if not full_answer_parts:
+            logger.info(f"LLM first token took: {(time.time() - start_gen)*1000:.2f}ms")
         full_answer_parts.append(token)
         yield f"data: {json.dumps({'token': token})}\n\n"
     
     # Total Latency 
     total_latency = (time.time() - start_total) * 1000
     metrics_store.record("total", total_latency)
+
+    # Format complete sources for caching
+    sources = [{
+        "doc_id": doc["doc_id"],
+        "text": doc["text"],
+        "score": doc["score"]
+    } for doc in retrieved_docs]
 
     # Store in Cache
     full_answer = "".join(full_answer_parts)

@@ -20,24 +20,31 @@ class CacheService:
     
     # L2: Redis client
     _redis_client: Optional[redis.Redis] = None
+    _last_fail_time: float = 0  # Cooldown for failing connections
 
     @classmethod
-    async def get_redis(cls) -> redis.Redis:
+    async def get_redis(cls) -> Optional[redis.Redis]:
         """Initialize or return the async Redis client."""
+        # 60 second cooldown if Redis is down
+        import time
         if cls._redis_client is None:
+            if time.time() - cls._last_fail_time < 60:
+                return None
+            
             try:
                 cls._redis_client = redis.from_url(
                     Config.REDIS_URL, 
                     decode_responses=True,
-                    socket_timeout=2.0,
-                    socket_connect_timeout=2.0
+                    socket_timeout=0.2,
+                    socket_connect_timeout=0.2
                 )
                 # Test connection
                 await cls._redis_client.ping()
                 logger.info("Connected to Redis for L2 caching.")
             except Exception as e:
-                logger.error(f"Failed to connect to Redis: {e}")
+                logger.error(f"Failed to connect to Redis (L2 Cache): {e}")
                 cls._redis_client = None
+                cls._last_fail_time = time.time()
         return cls._redis_client
 
     @classmethod

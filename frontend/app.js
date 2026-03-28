@@ -1,3 +1,13 @@
+// Generate or retrieve a persistent anonymous user ID
+function getUserId() {
+    let userId = localStorage.getItem('rag_user_id');
+    if (!userId) {
+        userId = crypto.randomUUID();
+        localStorage.setItem('rag_user_id', userId);
+    }
+    return userId;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // UI Elements
     const dropZone = document.getElementById('drop-zone');
@@ -54,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('user_id', getUserId());
 
             try {
                 const response = await fetch(`${API_BASE}/documents/upload`, {
@@ -174,43 +185,53 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_BASE}/query/stream`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query, top_k: topK })
+                body: JSON.stringify({ query, user_id: getUserId(), top_k: topK })
             });
 
             if (!response.ok) throw new Error('Query failed');
 
             const reader = response.body.getReader();
-            const decoder = new TextDecoder();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = '';
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+
+                // Keep the last partial line in the buffer
+                buffer = lines.pop();
 
                 for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.substring(6));
+                    if (line.trim().startsWith('data: ')) {
+                        const dataStr = line.trim().substring(6).trim();
+                        if (!dataStr) continue;
+                        try {
+                            const data = JSON.parse(dataStr);
 
-                        // Handle streaming tokens
-                        if (data.token) {
-                            if (!hasStartedStreaming) {
-                                assistantNodes.textContent.innerHTML = ''; // clear typing indicator
-                                hasStartedStreaming = true;
-                            }
-                            accumulatedText += data.token;
-                            assistantNodes.textContent.textContent = accumulatedText;
-                            scrollToBottom();
-                        }
-
-                        // Handle completion containing latency and sources
-                        if (data.done) {
-                            latencyMetric.textContent = `${data.latency_ms.toFixed(0)} ms`;
-                            if (data.sources) {
-                                appendSources(assistantNodes.textContent, data.sources);
+                            // Handle streaming tokens
+                            if (data.token) {
+                                if (!hasStartedStreaming) {
+                                    assistantNodes.textContent.innerHTML = ''; // clear typing indicator
+                                    hasStartedStreaming = true;
+                                }
+                                accumulatedText += data.token;
+                                assistantNodes.textContent.textContent = accumulatedText;
                                 scrollToBottom();
                             }
+
+                            // Handle completion containing latency and sources
+                            if (data.done) {
+                                latencyMetric.textContent = `${data.latency_ms.toFixed(0)} ms`;
+                                if (data.sources) {
+                                    appendSources(assistantNodes.textContent, data.sources);
+                                    scrollToBottom();
+                                }
+                            }
+                        } catch (e) {
+                            console.error("Failed to parse JSON:", dataStr, e);
                         }
                     }
                 }

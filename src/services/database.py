@@ -9,13 +9,18 @@ class Database:
     @classmethod
     async def get_pool(cls) -> asyncpg.Pool:
         if cls._pool is None:
+            import pgvector.asyncpg
+            async def init(conn):
+                await pgvector.asyncpg.register_vector(conn)
+
             try:
                 cls._pool = await asyncpg.create_pool(
                     dsn=Config.DB_URL,
                     min_size=1,
-                    max_size=10
+                    max_size=10,
+                    init=init
                 )
-                logger.info("PostgreSQL connection pool created.")
+                logger.info("PostgreSQL connection pool created with pgvector registered.")
             except Exception as e:
                 logger.error(f"Failed to create database pool: {str(e)}")
                 raise

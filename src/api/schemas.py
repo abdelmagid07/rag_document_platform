@@ -4,6 +4,7 @@ from typing import List, Optional
 
 class QueryRequest(BaseModel):
     query: str
+    user_id: str
     top_k: int = 5
 
 
