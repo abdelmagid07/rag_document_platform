@@ -9,7 +9,7 @@ services:
       - redis
 
   postgres:
-    image: ankane/pgvector:latest # pgvector pre-installed
+    image: ankane/pgvector:latest 
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
