@@ -1,53 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RAG Document Platform</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h2><i class="fa-solid fa-brain"></i> RAG Engine</h2>
-                <p>Knowledge Base</p>
+                <h2><i class="fa-solid fa-layer-group"></i> RAG Platform </h2>
             </div>
 
             <div class="sidebar-section">
-                <h3><i class="fa-solid fa-file-arrow-up"></i> Upload Document</h3>
+                <h3><i class="fa-solid fa-cloud-arrow-up"></i> Upload Documents</h3>
                 <div class="upload-area" id="drop-zone">
                     <input type="file" id="file-input" class="hidden-input" accept=".txt,.pdf,.md">
                     <div class="upload-content">
-                        <i class="fa-solid fa-cloud-arrow-up fa-2x"></i>
-                        <p>Drag & Drop or <span class="highlight">Browse</span></p>
-                        <small>Supported: .txt, .pdf, .md</small>
+                        <p>Select or Drop File</p>
+                        <small>Supported: TXT, PDF, MD</small>
                     </div>
                 </div>
                 <div id="upload-status" class="status-msg"></div>
             </div>
 
             <div class="sidebar-section">
-                <h3><i class="fa-solid fa-sliders"></i> Retrieval Parameters</h3>
+                <h3><i class="fa-solid fa-sliders"></i> Retrieval Settings</h3>
                 <div class="parameter-group">
-                    <label for="top-k-slider">Top K Sources: <span id="top-k-value">3</span></label>
+                    <label for="top-k-slider">Top Results: <span id="top-k-value">3</span></label>
                     <input type="range" id="top-k-slider" min="1" max="10" value="3" class="modern-slider">
                 </div>
             </div>
-
+            
             <div class="sidebar-section metrics-section">
-                <h3><i class="fa-solid fa-chart-line"></i> System Metrics</h3>
+                <h3><i class="fa-solid fa-chart-line"></i> System Status</h3>
                 <div class="metric">
                     <span class="metric-label">Status</span>
                     <span class="metric-value status-indicator online">Online</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Last Latency</span>
+                    <span class="metric-label">Latency</span>
                     <span class="metric-value" id="latency-metric">-- ms</span>
                 </div>
             </div>
@@ -55,35 +51,31 @@
 
         <!-- Main Chat Area -->
         <main class="chat-container">
-            <header class="chat-header">
-                <h1>Document Interactions</h1>
-                <p>Ask questions about your uploaded documents.</p>
-            </header>
+            <button id="sidebar-toggle" class="sidebar-toggle-btn" title="Toggle Sidebar">
+                <i class="fa-solid fa-bars"></i>
+            </button>
 
             <div class="chat-history" id="chat-history">
                 <!-- Welcome Message -->
                 <div class="message system-msg">
-                    <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                    <div class="avatar"><i class="fa-solid fa-cube"></i></div>
                     <div class="message-content">
-                        <p>Welcome to the RAG Document Platform. Upload your documents in the sidebar and ask me
-                            anything about them!</p>
+                        Welcome! Upload your documents in the sidebar and start asking questions.
                     </div>
                 </div>
             </div>
 
             <div class="chat-input-area">
                 <form id="chat-form" class="input-form">
-                    <input type="text" id="query-input" placeholder="Ask a question..." autocomplete="off" required>
+                    <input type="text" id="query-input" placeholder="Type your question here..." autocomplete="off" required>
                     <button type="submit" id="send-button" class="btn-primary">
-                        <i class="fa-solid fa-paper-plane"></i>
+                        Send <i class="fa-solid fa-paper-plane" style="margin-left: 6px;"></i>
                     </button>
                 </form>
-                <div class="input-footer">Powered by Advanced RAG Pipeline</div>
             </div>
         </main>
     </div>
 
     <script src="app.js"></script>
 </body>
-
 </html>

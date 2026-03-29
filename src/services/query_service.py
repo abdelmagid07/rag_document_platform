@@ -83,7 +83,8 @@ async def run_query_stream(query: str, top_k: int, user_id: str):
     # Embed query
     _s = time.time()
     query_embedding = await get_embeddings(query)
-    logger.info(f"Embedding took: {(time.time() - _s)*1000:.2f}ms")
+    embed_latency = (time.time() - _s) * 1000
+    logger.info(f"Embedding took: {embed_latency:.2f}ms")
 
     # Retrieve documents
     start_retr = time.time()
@@ -92,9 +93,11 @@ async def run_query_stream(query: str, top_k: int, user_id: str):
     metrics_store.record("retrieval", retr_latency)
     logger.info(f"DB Search took: {retr_latency:.2f}ms")
 
-    # Yield sources immediately to UI (excluding text so payload is small)
+    # Yield sources immediately to UI
     ui_sources = [{
         "doc_id": doc["doc_id"],
+        "filename": doc.get("filename", "Document"),
+        "text": doc.get("text", ""),
         "score": doc["score"]
     } for doc in retrieved_docs]
     
@@ -109,7 +112,10 @@ async def run_query_stream(query: str, top_k: int, user_id: str):
         full_answer_parts.append(token)
         yield f"data: {json.dumps({'token': token})}\n\n"
     
-    # Total Latency 
+    # Calculate Time to First Token (TTFT)
+    ttft_latency = embed_latency + retr_latency
+    
+    # Store total latency in metrics
     total_latency = (time.time() - start_total) * 1000
     metrics_store.record("total", total_latency)
 
@@ -125,8 +131,8 @@ async def run_query_stream(query: str, top_k: int, user_id: str):
     full_answer = "".join(full_answer_parts)
     await CacheService.set(cache_key, {"answer": full_answer, "sources": sources})
 
-    # Final metadata event
-    yield f"data: {json.dumps({'latency_ms': round(total_latency, 2), 'done': True})}\n\n"
+    # Final metadata event sending ttft_latency instead of total_latency
+    yield f"data: {json.dumps({'latency_ms': round(ttft_latency, 2), 'done': True})}\n\n"
 
     # Structured Logging
     logger.info(

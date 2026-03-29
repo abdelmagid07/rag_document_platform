@@ -2,7 +2,12 @@
 function getUserId() {
     let userId = localStorage.getItem('rag_user_id');
     if (!userId) {
-        userId = crypto.randomUUID();
+        // Fallback
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            userId = crypto.randomUUID();
+        } else {
+            userId = 'anon-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
         localStorage.setItem('rag_user_id', userId);
     }
     return userId;
@@ -20,11 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatHistory = document.getElementById('chat-history');
     const sendButton = document.getElementById('send-button');
     const latencyMetric = document.getElementById('latency-metric');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.querySelector('.sidebar');
+
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+        });
+    }
 
     // API Base URL
-    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-        ? 'http://127.0.0.1:8080' 
-        : `http://${window.location.hostname}:8080`;
+    const API_BASE = 'http://18.219.12.24:8080';
 
     // File Upload Handling
     const handleDragEvent = (e) => {
@@ -98,10 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${role === 'user' ? 'user-msg' : 'system-msg'}`;
 
-        const avatarIcon = role === 'user' ? 'fa-user' : 'fa-robot';
+        const avatarIcon = role === 'user' ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-cube"></i>';
 
         msgDiv.innerHTML = `
-            <div class="avatar"><i class="fa-solid ${avatarIcon}"></i></div>
+            <div class="avatar">${avatarIcon}</div>
             <div class="message-content">
                 <div class="text-content"></div>
             </div>
@@ -138,20 +149,54 @@ document.addEventListener('DOMContentLoaded', () => {
     function appendSources(msgContentDiv, sources) {
         if (!sources || sources.length === 0) return;
 
-        const sourcesDiv = document.createElement('div');
-        sourcesDiv.className = 'source-badges';
+        // Container for all sources
+        const sourceSection = document.createElement('div');
+        sourceSection.className = 'source-section';
+        
+        sourceSection.innerHTML = `
+            <div class="source-header">Retrieved Sources</div>
+            <div class="source-grid"></div>
+        `;
 
-        sources.forEach((source, index) => {
-            const badge = document.createElement('div');
-            badge.className = 'source-badge';
+        const grid = sourceSection.querySelector('.source-grid');
+
+        sources.forEach((source) => {
+            const card = document.createElement('div');
+            card.className = 'source-card';
 
             const name = source.filename || 'Document';
+            const scorePercent = Math.round(source.score * 100);
 
-            badge.innerHTML = `<i class="fa-solid fa-file-lines"></i> ${name} (Score: ${(source.score).toFixed(2)})`;
-            sourcesDiv.appendChild(badge);
+            card.innerHTML = `
+                <div class="source-card-header" title="Click to view full snippet">
+                    <div class="source-title-wrap">
+                        <i class="fa-solid fa-file-alt"></i>
+                        <span class="source-name">${name}</span>
+                        <span class="source-score">${scorePercent}% MATCH</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                </div>
+                <div class="source-snippet">${source.text || 'No snippet available.'}</div>
+            `;
+
+            // Toggle snippet functionality
+            const header = card.querySelector('.source-card-header');
+            const snippet = card.querySelector('.source-snippet');
+            const icon = card.querySelector('.toggle-icon');
+            
+            header.addEventListener('click', () => {
+                snippet.classList.toggle('active');
+                icon.classList.toggle('fa-chevron-up');
+                icon.classList.toggle('fa-chevron-down');
+                // Ensure we stay scrolled to bottom if the div expands
+                setTimeout(scrollToBottom, 50);
+            });
+
+            grid.appendChild(card);
         });
 
-        msgContentDiv.parentElement.appendChild(sourcesDiv);
+        // Prepend to the parent of message-content so it renders BEFORE the text response
+        msgContentDiv.parentElement.insertBefore(sourceSection, msgContentDiv);
     }
 
     function scrollToBottom() {
@@ -218,13 +263,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                 scrollToBottom();
                             }
 
-                            // Handle completion containing latency and sources
+                            // Handle sources 
+                            if (data.sources) {
+                                appendSources(assistantNodes.textContent, data.sources);
+                                scrollToBottom();
+                            }
+
+                            // Handle completion containing latency
                             if (data.done) {
                                 latencyMetric.textContent = `${data.latency_ms.toFixed(0)} ms`;
-                                if (data.sources) {
-                                    appendSources(assistantNodes.textContent, data.sources);
-                                    scrollToBottom();
-                                }
                             }
                         } catch (e) {
                             console.error("Failed to parse JSON:", dataStr, e);
